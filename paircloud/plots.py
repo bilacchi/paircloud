@@ -310,17 +310,17 @@ def paired_raincloud(
 
     # 1. Violins
     if orientation == 'h':
-        ax.fill_between(eval_points1, pos1 - 0.1, pos1 - 0.1 - dens1, color=c1, alpha=0.5, lw=0)
-        ax.fill_between(eval_points2, pos2 + 0.1, pos2 + 0.1 + dens2, color=c2, alpha=0.5, lw=0)
+        ax.fill_between(eval_points1, pos1 - 0.25, pos1 - 0.25 - dens1, color=c1, alpha=0.5, lw=0)
+        ax.fill_between(eval_points2, pos2 + 0.25, pos2 + 0.25 + dens2, color=c2, alpha=0.5, lw=0)
     else:
-        ax.fill_betweenx(eval_points1, pos1 - 0.1, pos1 - 0.1 - dens1, color=c1, alpha=0.5, lw=0)
-        ax.fill_betweenx(eval_points2, pos2 + 0.1, pos2 + 0.1 + dens2, color=c2, alpha=0.5, lw=0)
+        ax.fill_betweenx(eval_points1, pos1 - 0.25, pos1 - 0.25 - dens1, color=c1, alpha=0.5, lw=0)
+        ax.fill_betweenx(eval_points2, pos2 + 0.25, pos2 + 0.25 + dens2, color=c2, alpha=0.5, lw=0)
 
     # 2. Boxplots
     vert = orientation == 'v'
     ax.boxplot(
         [data1],
-        positions=[pos1 - 0.05],
+        positions=[pos1 - 0.15],
         widths=width * 0.1,
         patch_artist=True,
         showfliers=False,
@@ -333,7 +333,7 @@ def paired_raincloud(
 
     ax.boxplot(
         [data2],
-        positions=[pos2 + 0.05],
+        positions=[pos2 + 0.15],
         widths=width * 0.1,
         patch_artist=True,
         showfliers=False,
@@ -356,7 +356,7 @@ def paired_raincloud(
     rgb2[:, 3] = alphas2
 
     # Use consistent jitter displacement
-    offsets = np.random.uniform(-width * 0.1, width * 0.1, size=n)
+    offsets = np.random.uniform(-width * 0.05, width * 0.05, size=n)
     jit1 = pos1 + offsets
     jit2 = pos2 + offsets
 
