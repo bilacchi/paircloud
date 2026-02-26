@@ -48,6 +48,7 @@ def faded_dotplot(
     dot_size=None,
     fade_method='density',
     jitter=False,
+    side='positive',
 ):
     """
     Creates a faded dotplot.
@@ -64,6 +65,7 @@ def faded_dotplot(
         dot_size: visual size of dots (if None, auto-calculated)
         fade_method: "density" or "quantile"
         jitter: if True, applies random jitter instead of strict stacking
+        side: "positive", "negative", or "both" (direction of dot placement)
     """
     if ax is None:
         ax = plt.gca()
@@ -84,34 +86,42 @@ def faded_dotplot(
     colors[:, 3] = alphas
 
     if jitter:
-        # Simple jitter
-        offsets = position + np.random.uniform(-width / 2, width / 2, size=n)
+        if side in ('positive', 'top', 'right'):
+            dist = np.random.uniform(0, width / 2, size=n)
+        elif side in ('negative', 'bottom', 'left'):
+            dist = np.random.uniform(-width / 2, 0, size=n)
+        else:
+            dist = np.random.uniform(-width / 2, width / 2, size=n)
+        offsets = position + dist
+
         if orientation == 'h':
             ax.scatter(data, offsets, c=colors, s=dot_size if dot_size else 20)
         else:
             ax.scatter(offsets, data, c=colors, s=dot_size if dot_size else 20)
     else:
-        # Strict dot stacking (simple O(N^2) binning approach for visualization)
-        # We bin the data depending on dot_size logic, but a fast heuristic
-        # is digitizing over a grid.
+        # Strict dot stacking
         grid_bins = min(50, n)
         hist, bin_edges = np.histogram(data, bins=grid_bins)
 
-        # We need to map each data point to its bin and assign a stacking height
         bin_indices = np.digitize(data, bin_edges) - 1
         bin_indices = np.clip(bin_indices, 0, grid_bins - 1)
 
         stack_counts = np.zeros(grid_bins)
         offsets = np.zeros(n)
 
-        # Max height scaling
         max_stack = hist.max()
         scale_factor = (width / 2) / max(1, max_stack)
 
         for i in range(n):
             b = bin_indices[i]
-            # stagger them from the baseline
-            offsets[i] = position + (stack_counts[b]) * scale_factor
+            if side in ('positive', 'top', 'right'):
+                offsets[i] = position + stack_counts[b] * scale_factor
+            elif side in ('negative', 'bottom', 'left'):
+                offsets[i] = position - stack_counts[b] * scale_factor
+            else:
+                s_val = 1 if stack_counts[b] % 2 == 0 else -1
+                step = (stack_counts[b] + 1) // 2
+                offsets[i] = position + s_val * step * scale_factor
             stack_counts[b] += 1
 
         if orientation == 'h':
@@ -190,6 +200,7 @@ def shadeplot(
         width=width,
         dot_size=dot_size,
         jitter=True,
+        side='positive',
     )  # Jitter works best overlaid on violins
 
     return ax
@@ -262,6 +273,7 @@ def raincloud(data, ax=None, color='C0', orientation='h', position=0, width=0.8,
         dot_size=dot_size,
         jitter=True,
         fade_method='density',
+        side='both',
     )
 
     return ax
