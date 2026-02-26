@@ -2,36 +2,18 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .calcs import calculate_kde
+from .calcs import (
+    calculate_kde_with_hdi,
+    calculate_point_densities,
+    compute_stack_offsets,
+)
 
 
 def _get_density_and_thresholds(data, intervals, grid_points=200, bandwidth=None):
     if len(data) == 0:
         return np.array([]), np.array([]), []
 
-    eval_points = np.linspace(data.min() - np.std(data), data.max() + np.std(data), grid_points)
-    density = calculate_kde(data, eval_points, bandwidth=bandwidth)
-
-    if not intervals:
-        return eval_points, density, []
-
-    sorted_idxs = np.argsort(density)[::-1]
-    sorted_density = density[sorted_idxs]
-    cumulative_mass = np.cumsum(sorted_density) * (eval_points[1] - eval_points[0])
-
-    if cumulative_mass[-1] > 0:
-        cumulative_mass /= cumulative_mass[-1]
-
-    thresholds = []
-    # Highest interval (e.g. 95) first -> lowest density threshold
-    for interval in sorted(intervals, reverse=True):
-        target = interval / 100.0
-        idx = np.searchsorted(cumulative_mass, target)
-        if idx >= len(sorted_density):
-            idx = len(sorted_density) - 1
-        thresholds.append(sorted_density[idx])
-
-    return eval_points, density, thresholds
+    return calculate_kde_with_hdi(data, intervals, grid_points=grid_points, bandwidth=bandwidth)
 
 
 def _draw_stepped_density(
@@ -107,10 +89,10 @@ def _draw_stepped_density(
 
 def _get_alphas_from_density(data, min_alpha=0.15, max_alpha=1.0):
     """
-    Computes KDE density for each point and maps it to an alpha value.
+    Computes KDE density for each point natively in Rust and maps it to an alpha value.
     Points in the dense regions get max_alpha, points in tails get min_alpha.
     """
-    densities = calculate_kde(data, data)
+    densities = calculate_point_densities(data, data)
     d_min, d_max = densities.min(), densities.max()
     if d_max == d_min:
         return np.full_like(densities, max_alpha)
@@ -200,30 +182,8 @@ def faded_dotplot(
         else:
             ax.scatter(offsets, data, c=colors, s=dot_size if dot_size else 20)
     else:
-        # Strict dot stacking
-        grid_bins = min(50, n)
-        hist, bin_edges = np.histogram(data, bins=grid_bins)
-
-        bin_indices = np.digitize(data, bin_edges) - 1
-        bin_indices = np.clip(bin_indices, 0, grid_bins - 1)
-
-        stack_counts = np.zeros(grid_bins)
-        offsets = np.zeros(n)
-
-        max_stack = hist.max()
-        scale_factor = (width / 2) / max(1, max_stack)
-
-        for i in range(n):
-            b = bin_indices[i]
-            if side in ('positive', 'top', 'right'):
-                offsets[i] = position + stack_counts[b] * scale_factor
-            elif side in ('negative', 'bottom', 'left'):
-                offsets[i] = position - stack_counts[b] * scale_factor
-            else:
-                s_val = 1 if stack_counts[b] % 2 == 0 else -1
-                step = (stack_counts[b] + 1) // 2
-                offsets[i] = position + s_val * step * scale_factor
-            stack_counts[b] += 1
+        # Strict dot stacking computed blazingly fast in Rust
+        offsets = compute_stack_offsets(data, position, width, side, bins=min(50, n))
 
         if orientation == 'h':
             ax.scatter(data, offsets, c=colors, s=dot_size if dot_size else 20)
