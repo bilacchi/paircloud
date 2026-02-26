@@ -76,6 +76,49 @@ def test_kde_nan_handling():
     assert densities[0] >= 0
 
 
+def test_hdi_threshold_integration():
+    """Test the fast single-pass Rust calculation for KDE with thresholds."""
+    data = np.random.normal(loc=0, scale=1, size=100)
+    eval_points, density, thresholds = paircloud.calcs.calculate_kde_with_hdi(
+        data, intervals=[50.0, 95.0], grid_points=200
+    )
+
+    # Assert grid resolution
+    assert len(eval_points) == 200
+    assert len(density) == 200
+
+    # Assert thresholds corresponding to the reverse sorted interval sizes (95, then 50)
+    assert len(thresholds) == 2
+    assert thresholds[0] < thresholds[1], (
+        'The 95% HDI density boundary should be lower than the 50% boundary.'
+    )
+
+
+def test_compute_stack_offsets_validation():
+    """Verify Rust array mapping correctly computes strictly typed dot stacking alignments."""
+    data = np.array([1.0, 1.0, 1.0, 2.0, 2.0, 3.0])
+    offsets = paircloud.calcs.compute_stack_offsets(
+        data, position=0.0, width=0.8, side='both', bins=50
+    )
+
+    assert offsets.shape == (6,)
+
+    # In a given bin of 3 items (the [1.0, 1.0, 1.0] clump), the offset should alternate
+    # We don't hardcode the exact values, but assert they expand around the 0.0 baseline
+    assert np.any(offsets > 0)
+    assert np.any(offsets < 0)
+
+
+def test_point_density_n_body_computation():
+    """Test that N-body point transparency matrices map back identically shaped outputs."""
+    data = np.random.normal(0, 1, 10)
+    eval_pts = np.random.normal(0, 1, 15)
+    densities = paircloud.calcs.calculate_point_densities(data, eval_pts)
+
+    assert densities.shape == (15,)
+    assert not np.isnan(densities).any()
+
+
 @pytest.mark.parametrize(
     'plot_func',
     [

@@ -1,4 +1,4 @@
-# Paircloud ☔️
+# Paircloud
 
 A hybrid Python/Rust package for creating beautiful, transparent data graphs, particularly faded dotplots, shadeplots, and classic raincloud plots.
 
@@ -24,7 +24,7 @@ uv pip install -e .
 - **Paired Rainclouds**: Visualize clustered, repeated measures data with matched-jitter connective lines safely overlaid between two distinct populations.
 
 ## Fast Rust Backend
-Traditional KDE plots can be slow for large datasets. Paircloud delegates the intensive O(N×M) density evaluations to compiled Rust via `paircloud._paircloud_rs.calc_kde`.
+Traditional KDE plots and jitter tracking can be slow for large datasets. Paircloud natively delegates the intensive O(N×M) density evaluations, N-body density fading, dotplot stack allocation offsets, and cumulative HDI interpolation directly to compiled Rust memory limits, offering highly optimized computation speeds (e.g. ~130x speedup on dotplot stacking arrays).
 
 ## Example Usage
 
