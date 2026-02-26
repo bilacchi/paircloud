@@ -10,13 +10,31 @@ def main():
     group1 = np.random.normal(loc=5, scale=1.5, size=400)
     group2 = np.random.normal(loc=7, scale=1.2, size=300)
 
-    fig, axes = plt.subplots(1, 4, figsize=(24, 6))
+    fig, axes = plt.subplots(1, 5, figsize=(30, 6))
 
-    # 1. Faded Dotplot
+    # 1. Faded Dotplot (One-sided with CI/Mean)
     ax = axes[0]
-    paircloud.faded_dotplot(group1, ax=ax, color='#E63946', position=1, orientation='v')
-    paircloud.faded_dotplot(group2, ax=ax, color='#457B9D', position=2, orientation='v')
-    ax.set_title('Faded Dotplots')
+    paircloud.faded_dotplot(
+        group1,
+        ax=ax,
+        color='#E63946',
+        position=1,
+        orientation='v',
+        side='right',
+        show_mean_ci=True,
+        show_mean_text=True,
+    )
+    paircloud.faded_dotplot(
+        group2,
+        ax=ax,
+        color='#457B9D',
+        position=2,
+        orientation='v',
+        side='right',
+        show_mean_ci=True,
+        show_mean_text=True,
+    )
+    ax.set_title('Faded Dotplots (with Mean/CI)')
     ax.set_xticks([1, 2])
     ax.set_xticklabels(['Group 1', 'Group 2'])
 
@@ -36,8 +54,16 @@ def main():
     ax.set_xticks([1, 2])
     ax.set_xticklabels(['Group 1', 'Group 2'])
 
-    # 4. Paired Raincloud
+    # 4. Fadecloud (New)
     ax = axes[3]
+    paircloud.fadecloud(group1, ax=ax, color='#E63946', position=1, orientation='v')
+    paircloud.fadecloud(group2, ax=ax, color='#457B9D', position=2, orientation='v')
+    ax.set_title('Fadecloud')
+    ax.set_xticks([1, 2])
+    ax.set_xticklabels(['Group 1', 'Group 2'])
+
+    # 5. Paired Raincloud
+    ax = axes[4]
     # filter to identical lengths to act as "repeated measures" data
     paired1 = group1[:300]
     paired2 = group2[:300]

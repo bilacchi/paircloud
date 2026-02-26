@@ -48,6 +48,9 @@ def faded_dotplot(
     dot_size=None,
     fade_method='density',
     jitter=False,
+    side='both',
+    show_mean_ci=False,
+    show_mean_text=False,
 ):
     """
     Creates a faded dotplot.
@@ -64,6 +67,9 @@ def faded_dotplot(
         dot_size: visual size of dots (if None, auto-calculated)
         fade_method: "density" or "quantile"
         jitter: if True, applies random jitter instead of strict stacking
+        side: 'both', 'left', 'right', 'top', 'bottom' (determines stacking direction)
+        show_mean_ci: boolean to draw a 95% CI dot-whisker
+        show_mean_text: boolean to label the mean numerically
     """
     if ax is None:
         ax = plt.gca()
@@ -71,6 +77,8 @@ def faded_dotplot(
     data = np.asarray(data)
     data = data[~np.isnan(data)]
     n = len(data)
+    if n == 0:
+        return ax
 
     if fade_method == 'density':
         alphas = _get_alphas_from_density(data, min_alpha, max_alpha)
@@ -84,20 +92,21 @@ def faded_dotplot(
     colors[:, 3] = alphas
 
     if jitter:
-        # Simple jitter
-        offsets = position + np.random.uniform(-width / 2, width / 2, size=n)
+        if side in ('top', 'right'):
+            dist = np.random.uniform(0, width / 2, size=n)
+        elif side in ('bottom', 'left'):
+            dist = np.random.uniform(-width / 2, 0, size=n)
+        else:
+            dist = np.random.uniform(-width / 2, width / 2, size=n)
+        offsets = position + dist
         if orientation == 'h':
             ax.scatter(data, offsets, c=colors, s=dot_size if dot_size else 20)
         else:
             ax.scatter(offsets, data, c=colors, s=dot_size if dot_size else 20)
     else:
-        # Strict dot stacking (simple O(N^2) binning approach for visualization)
-        # We bin the data depending on dot_size logic, but a fast heuristic
-        # is digitizing over a grid.
         grid_bins = min(50, n)
         hist, bin_edges = np.histogram(data, bins=grid_bins)
 
-        # We need to map each data point to its bin and assign a stacking height
         bin_indices = np.digitize(data, bin_edges) - 1
         bin_indices = np.clip(bin_indices, 0, grid_bins - 1)
 
@@ -110,14 +119,84 @@ def faded_dotplot(
 
         for i in range(n):
             b = bin_indices[i]
-            # stagger them from the baseline
-            offsets[i] = position + (stack_counts[b]) * scale_factor
+            if side in ('top', 'right'):
+                offsets[i] = position + stack_counts[b] * scale_factor
+            elif side in ('bottom', 'left'):
+                offsets[i] = position - stack_counts[b] * scale_factor
+            else:
+                s_val = 1 if stack_counts[b] % 2 == 0 else -1
+                step = (stack_counts[b] + 1) // 2
+                offsets[i] = position + s_val * step * scale_factor
             stack_counts[b] += 1
 
         if orientation == 'h':
             ax.scatter(data, offsets, c=colors, s=dot_size if dot_size else 20)
         else:
             ax.scatter(offsets, data, c=colors, s=dot_size if dot_size else 20)
+
+    if show_mean_ci or show_mean_text:
+        mean_val = np.mean(data)
+        sem = np.std(data, ddof=1) / np.sqrt(n) if n > 1 else 0
+        ci_95 = 1.96 * sem
+
+        offset_dir = -1 if side in ('right', 'top') else 1
+        if side == 'both':
+            mean_pos = position - width * 0.6
+            text_pos = mean_pos - width * 0.15
+        else:
+            mean_pos = position + offset_dir * width * 0.15
+            text_pos = position + offset_dir * width * 0.35
+
+        if show_mean_ci:
+            if orientation == 'h':
+                ax.errorbar(
+                    mean_val,
+                    mean_pos,
+                    xerr=ci_95,
+                    fmt='o',
+                    color='black',
+                    linewidth=1.5,
+                    markersize=4,
+                    capsize=3,
+                    zorder=10,
+                )
+            else:
+                ax.errorbar(
+                    mean_pos,
+                    mean_val,
+                    yerr=ci_95,
+                    fmt='o',
+                    color='black',
+                    linewidth=1.5,
+                    markersize=4,
+                    capsize=3,
+                    zorder=10,
+                )
+
+        if show_mean_text:
+            text_str = f'{mean_val:.1f}'
+            if orientation == 'h':
+                ax.text(
+                    mean_val,
+                    text_pos,
+                    text_str,
+                    color='black',
+                    fontsize=8,
+                    ha='center',
+                    va='center',
+                    zorder=10,
+                )
+            else:
+                ax.text(
+                    text_pos,
+                    mean_val,
+                    text_str,
+                    color='black',
+                    fontsize=8,
+                    ha='center',
+                    va='center',
+                    zorder=10,
+                )
 
     return ax
 
@@ -190,7 +269,71 @@ def shadeplot(
         width=width,
         dot_size=dot_size,
         jitter=True,
+        side='top' if orientation == 'h' else 'right',
     )  # Jitter works best overlaid on violins
+
+    return ax
+
+
+def fadecloud(
+    data,
+    ax=None,
+    color='C0',
+    min_alpha=0.15,
+    max_alpha=1.0,
+    orientation='h',
+    position=0,
+    width=0.8,
+    dot_size=None,
+    bandwidth=None,
+    show_mean_ci=True,
+    show_mean_text=True,
+):
+    """
+    Creates a fadecloud: A KDE slab on one side and a faded dotplot on the other,
+    with an optional 95% CI dot-whisker. Translates from the R ggdist stat_slab + stat_dots concept.
+    """
+    if ax is None:
+        ax = plt.gca()
+
+    data = np.asarray(data)
+    data = data[~np.isnan(data)]
+
+    grid_size = 200
+    eval_points = np.linspace(data.min() - np.std(data), data.max() + np.std(data), grid_size)
+    densities = calculate_kde(data, eval_points, bandwidth=bandwidth)
+
+    if densities.max() > 0:
+        densities = (densities / densities.max()) * (width / 2)
+
+    base_alpha = max(min_alpha * 2, 0.4)
+    # KDE goes opposite the dots
+    if orientation == 'h':
+        ax.fill_between(
+            eval_points, position, position - densities, color=color, alpha=base_alpha, lw=0
+        )
+    else:
+        ax.fill_betweenx(
+            eval_points, position, position - densities, color=color, alpha=base_alpha, lw=0
+        )
+
+    # Dots and CI go to the 'right' or 'top'
+    faded_dotplot(
+        data,
+        ax=ax,
+        color=color,
+        min_alpha=min_alpha,
+        max_alpha=max_alpha,
+        orientation=orientation,
+        position=position,
+        width=width,
+        dot_size=dot_size,
+        fade_method='density',
+        jitter=True,
+        side='top' if orientation == 'h' else 'right',
+        show_mean_ci=show_mean_ci,
+        show_mean_text=show_mean_text,
+    )
 
     return ax
 

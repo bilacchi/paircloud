@@ -79,6 +79,7 @@ def test_kde_nan_handling():
 @pytest.mark.parametrize(
     'plot_func',
     [
+        paircloud.fadecloud,
         paircloud.faded_dotplot,
         paircloud.shadeplot,
         paircloud.raincloud,
