@@ -15,7 +15,7 @@ def main():
     # 1. Faded Dotplot
     ax = axes[0]
     paircloud.faded_dotplot(
-        group1, ax=ax, color='#E63946', position=1, orientation='v', side='right', show_mean=True
+        group1, ax=ax, color='#E63946', position=1, orientation='v', side='left', show_mean=True
     )
     paircloud.faded_dotplot(
         group2, ax=ax, color='#457B9D', position=2, orientation='v', side='right', show_mean=True

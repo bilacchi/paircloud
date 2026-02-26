@@ -235,13 +235,15 @@ def faded_dotplot(
         sem = np.std(data, ddof=1) / np.sqrt(n) if n > 1 else 0
         ci_95 = 1.96 * sem
 
-        offset_dir = -1 if side in ('negative', 'bottom', 'left') else 1
+        sign = 1 if side in ('negative', 'bottom', 'left') else -1
         if side in ('positive', 'negative', 'top', 'bottom', 'left', 'right'):
-            mean_pos = position + offset_dir * width * 0.15
-            text_pos = position + offset_dir * width * 0.35
+            mean_pos = position + sign * width * 0.1
+            text_pos = position + sign * width * 0.2
         else:
-            mean_pos = position - width * 0.6
-            text_pos = mean_pos - width * 0.15
+            mean_pos = position - width * 0.3
+            text_pos = position - width * 0.45
+
+        pad_pos = text_pos + sign * width * 0.05
 
         if orientation == 'h':
             ax.errorbar(
@@ -265,6 +267,7 @@ def faded_dotplot(
                 va='center',
                 zorder=10,
             )
+            ax.plot(mean_val, pad_pos, color='none', alpha=0)
         else:
             ax.errorbar(
                 mean_pos,
@@ -287,6 +290,7 @@ def faded_dotplot(
                 va='center',
                 zorder=10,
             )
+            ax.plot(pad_pos, mean_val, color='none', alpha=0)
 
     return ax
 
