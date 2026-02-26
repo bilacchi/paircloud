@@ -149,6 +149,7 @@ def faded_dotplot(
     fade_method='density',
     jitter=False,
     side='positive',
+    show_mean=False,
 ):
     """
     Creates a faded dotplot.
@@ -228,6 +229,64 @@ def faded_dotplot(
             ax.scatter(data, offsets, c=colors, s=dot_size if dot_size else 20)
         else:
             ax.scatter(offsets, data, c=colors, s=dot_size if dot_size else 20)
+
+    if show_mean:
+        mean_val = np.mean(data)
+        sem = np.std(data, ddof=1) / np.sqrt(n) if n > 1 else 0
+        ci_95 = 1.96 * sem
+
+        offset_dir = -1 if side in ('negative', 'bottom', 'left') else 1
+        if side in ('positive', 'negative', 'top', 'bottom', 'left', 'right'):
+            mean_pos = position + offset_dir * width * 0.15
+            text_pos = position + offset_dir * width * 0.35
+        else:
+            mean_pos = position - width * 0.6
+            text_pos = mean_pos - width * 0.15
+
+        if orientation == 'h':
+            ax.errorbar(
+                mean_val,
+                mean_pos,
+                xerr=ci_95,
+                fmt='o',
+                color='black',
+                linewidth=1.5,
+                markersize=4,
+                capsize=3,
+                zorder=10,
+            )
+            ax.text(
+                mean_val,
+                text_pos,
+                f'{mean_val:.1f}',
+                color='black',
+                fontsize=8,
+                ha='center',
+                va='center',
+                zorder=10,
+            )
+        else:
+            ax.errorbar(
+                mean_pos,
+                mean_val,
+                yerr=ci_95,
+                fmt='o',
+                color='black',
+                linewidth=1.5,
+                markersize=4,
+                capsize=3,
+                zorder=10,
+            )
+            ax.text(
+                text_pos,
+                mean_val,
+                f'{mean_val:.1f}',
+                color='black',
+                fontsize=8,
+                ha='center',
+                va='center',
+                zorder=10,
+            )
 
     return ax
 
