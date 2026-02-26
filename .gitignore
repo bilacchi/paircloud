@@ -68,6 +68,3 @@ target/
 .vscode/
 *.swp
 *.swo
-
-# Generated examples
-demo.png
