@@ -5,6 +5,106 @@ import numpy as np
 from .calcs import calculate_kde
 
 
+def _get_density_and_thresholds(data, intervals, grid_points=200, bandwidth=None):
+    if len(data) == 0:
+        return np.array([]), np.array([]), []
+
+    eval_points = np.linspace(data.min() - np.std(data), data.max() + np.std(data), grid_points)
+    density = calculate_kde(data, eval_points, bandwidth=bandwidth)
+
+    if not intervals:
+        return eval_points, density, []
+
+    sorted_idxs = np.argsort(density)[::-1]
+    sorted_density = density[sorted_idxs]
+    cumulative_mass = np.cumsum(sorted_density) * (eval_points[1] - eval_points[0])
+
+    if cumulative_mass[-1] > 0:
+        cumulative_mass /= cumulative_mass[-1]
+
+    thresholds = []
+    # Highest interval (e.g. 95) first -> lowest density threshold
+    for interval in sorted(intervals, reverse=True):
+        target = interval / 100.0
+        idx = np.searchsorted(cumulative_mass, target)
+        if idx >= len(sorted_density):
+            idx = len(sorted_density) - 1
+        thresholds.append(sorted_density[idx])
+
+    return eval_points, density, thresholds
+
+
+def _draw_stepped_density(
+    ax,
+    eval_points,
+    raw_density,
+    thresholds,
+    position,
+    width_scale,
+    color,
+    orientation,
+    direction=1,
+    offset=0,
+):
+    if len(eval_points) == 0:
+        return
+
+    if raw_density.max() > 0:
+        density_plot = (raw_density / raw_density.max()) * width_scale
+    else:
+        density_plot = raw_density
+
+    base_alpha = 0.15
+    alphas = [0.4, 0.8]
+
+    pos_base = np.full_like(eval_points, float(position + offset))
+    pos_top = pos_base + direction * density_plot
+
+    # Use fill_between / fill_betweenx with where condition for steps
+    if orientation == 'h':
+        ax.fill_between(
+            eval_points,
+            pos_base,
+            pos_top,
+            where=raw_density > 0,
+            color=color,
+            alpha=base_alpha,
+            lw=0,
+        )
+        for i, thresh in enumerate(thresholds):
+            alpha = alphas[i] if i < len(alphas) else 0.85
+            ax.fill_between(
+                eval_points,
+                pos_base,
+                pos_top,
+                where=raw_density >= thresh,
+                color=color,
+                alpha=alpha,
+                lw=0,
+            )
+    else:
+        ax.fill_betweenx(
+            eval_points,
+            pos_base,
+            pos_top,
+            where=raw_density > 0,
+            color=color,
+            alpha=base_alpha,
+            lw=0,
+        )
+        for i, thresh in enumerate(thresholds):
+            alpha = alphas[i] if i < len(alphas) else 0.85
+            ax.fill_betweenx(
+                eval_points,
+                pos_base,
+                pos_top,
+                where=raw_density >= thresh,
+                color=color,
+                alpha=alpha,
+                lw=0,
+            )
+
+
 def _get_alphas_from_density(data, min_alpha=0.15, max_alpha=1.0):
     """
     Computes KDE density for each point and maps it to an alpha value.
@@ -143,6 +243,7 @@ def shadeplot(
     width=0.8,
     dot_size=None,
     bandwidth=None,
+    density_intervals=(50, 95),
 ):
     """
     Creates a shadeplot: A half-violin density slab with a faded dotplot overlaid.
@@ -153,39 +254,13 @@ def shadeplot(
     data = np.asarray(data)
     data = data[~np.isnan(data)]
 
-    # 1. Draw Density Slab (Half-violin)
-    grid_size = 200
-    eval_points = np.linspace(data.min() - np.std(data), data.max() + np.std(data), grid_size)
-    densities = calculate_kde(data, eval_points, bandwidth=bandwidth)
-
-    # Normalize density to fit within width
-    if densities.max() > 0:
-        densities = (densities / densities.max()) * (width / 2)
-
-    # To create a shaded slab, we use PolyCollection or fill_between with a gradient.
-    # matplotlib fill_between doesn't natively support alpha gradients along an axis easily,
-    # so we'll draw a solid slightly-transparent half violin as the "shade".
-    base_alpha = max(min_alpha * 2, 0.4)
-    if orientation == 'h':
-        # Horizontal implies data on X, density on Y
-        ax.fill_between(
-            eval_points,
-            position,
-            position + densities,
-            color=color,
-            alpha=base_alpha,
-            lw=0,
-        )
-    else:
-        # Vertical implies data on Y, density on X
-        ax.fill_betweenx(
-            eval_points,
-            position,
-            position + densities,
-            color=color,
-            alpha=base_alpha,
-            lw=0,
-        )
+    # 1. Draw Density Slab with HDI
+    eval_points, densities, thresholds = _get_density_and_thresholds(
+        data, density_intervals, bandwidth=bandwidth
+    )
+    _draw_stepped_density(
+        ax, eval_points, densities, thresholds, position, width / 2, color, orientation
+    )
 
     # 2. Add faded dots on top, positioned at the baseline or jittered slightly
     # For a classic shadeplot, dots are plotted inside the density or just below it.
@@ -206,7 +281,16 @@ def shadeplot(
     return ax
 
 
-def raincloud(data, ax=None, color='C0', orientation='h', position=0, width=0.8, dot_size=None):
+def raincloud(
+    data,
+    ax=None,
+    color='C0',
+    orientation='h',
+    position=0,
+    width=0.8,
+    dot_size=None,
+    density_intervals=(50, 95),
+):
     """
     Classic raincloud plot: Half-violin, boxplot, and jittered dots below.
     """
@@ -217,30 +301,10 @@ def raincloud(data, ax=None, color='C0', orientation='h', position=0, width=0.8,
     data = data[~np.isnan(data)]
 
     # 1. Half Violin (The Cloud)
-    grid_size = 200
-    eval_points = np.linspace(data.min() - np.std(data), data.max() + np.std(data), grid_size)
-    densities = calculate_kde(data, eval_points)
-    if densities.max() > 0:
-        densities = (densities / densities.max()) * (width / 2)
-
-    if orientation == 'h':
-        ax.fill_between(
-            eval_points,
-            position + 0.1,
-            position + 0.1 + densities,
-            color=color,
-            alpha=0.5,
-            lw=0,
-        )
-    else:
-        ax.fill_betweenx(
-            eval_points,
-            position + 0.1,
-            position + 0.1 + densities,
-            color=color,
-            alpha=0.5,
-            lw=0,
-        )
+    eval_points, densities, thresholds = _get_density_and_thresholds(data, density_intervals)
+    _draw_stepped_density(
+        ax, eval_points, densities, thresholds, position, width / 2, color, orientation, offset=0.1
+    )
 
     # 2. Boxplot (The Umbrella)
     vert = orientation == 'v'
@@ -290,6 +354,7 @@ def paired_raincloud(
     dot_size=None,
     line_color='gray',
     line_alpha=0.3,
+    density_intervals=(50, 95),
 ):
     """
     Creates a paired raincloud plot for repeated measures, connecting data points.
@@ -309,24 +374,16 @@ def paired_raincloud(
     pos1, pos2 = positions
     c1, c2 = colors
 
-    # Generate the KDEs
-    eval_points1 = np.linspace(data1.min() - np.std(data1), data1.max() + np.std(data1), 200)
-    dens1 = calculate_kde(data1, eval_points1)
-    if dens1.max() > 0:
-        dens1 = (dens1 / dens1.max()) * (width / 2.5)
-
-    eval_points2 = np.linspace(data2.min() - np.std(data2), data2.max() + np.std(data2), 200)
-    dens2 = calculate_kde(data2, eval_points2)
-    if dens2.max() > 0:
-        dens2 = (dens2 / dens2.max()) * (width / 2.5)
-
     # 1. Violins
-    if orientation == 'h':
-        ax.fill_between(eval_points1, pos1 - 0.25, pos1 - 0.25 - dens1, color=c1, alpha=0.5, lw=0)
-        ax.fill_between(eval_points2, pos2 + 0.25, pos2 + 0.25 + dens2, color=c2, alpha=0.5, lw=0)
-    else:
-        ax.fill_betweenx(eval_points1, pos1 - 0.25, pos1 - 0.25 - dens1, color=c1, alpha=0.5, lw=0)
-        ax.fill_betweenx(eval_points2, pos2 + 0.25, pos2 + 0.25 + dens2, color=c2, alpha=0.5, lw=0)
+    eval_points1, dens1, t1 = _get_density_and_thresholds(data1, density_intervals)
+    eval_points2, dens2, t2 = _get_density_and_thresholds(data2, density_intervals)
+
+    _draw_stepped_density(
+        ax, eval_points1, dens1, t1, pos1, width / 2.5, c1, orientation, direction=-1, offset=-0.25
+    )
+    _draw_stepped_density(
+        ax, eval_points2, dens2, t2, pos2, width / 2.5, c2, orientation, direction=1, offset=0.25
+    )
 
     # 2. Boxplots
     vert = orientation == 'v'
