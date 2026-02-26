@@ -1,0 +1,51 @@
+[project]
+name = "paircloud"
+version = "0.1.0"
+description = "A Python package for creating transparent data graphs including faded dotplots and shadeplots."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.0.0",
+    "numpy>=1.20.0"
+]
+
+[build-system]
+requires = ["maturin>=1.5"]
+build-backend = "maturin"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "."
+module-name = "paircloud._paircloud_rs"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+version_scheme = "semver"
+version_provider = "pep621"
+update_changelog_on_bump = true
+
+[dependency-groups]
+dev = [
+    "commitizen>=4.13.9",
+    "detect-secrets>=1.5.0",
+    "hypothesis>=6.151.9",
+    "maturin>=1.12.4",
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.2",
+]
